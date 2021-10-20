@@ -121,8 +121,6 @@ class Handler:
         Returns:
             :class:`aiohttp.web.HTTPOk`: The response back to the client.
         """
-        self._reset_db_connection()
-
         def get_base_paths_blocking():
             if self.distribution_model is None:
                 base_paths = list(Distribution.objects.values_list("base_path", flat=True))
@@ -134,7 +132,10 @@ class Handler:
 
         base_paths = await sync_to_async(get_base_paths_blocking)()
         directory_list = ["{}/".format(path) for path in base_paths]
-        return HTTPOk(headers={"Content-Type": "text/html"}, body=self.render_html(directory_list))
+        try:
+            return HTTPOk(headers={"Content-Type": "text/html"}, body=self.render_html(directory_list))
+        finally:
+            request.close()
 
     @classmethod
     async def find_base_path_cached(cls, request, cached):
@@ -200,10 +201,11 @@ class Handler:
             :class:`aiohttp.web.StreamResponse` or :class:`aiohttp.web.FileResponse`: The response
                 back to the client.
         """
-        self._reset_db_connection()
-
         path = request.match_info["path"]
-        return await self._match_and_stream(path, request)
+        try:
+            return await self._match_and_stream(path, request)
+        finally:
+            request.close()
 
     @staticmethod
     def _base_paths(path):
